@@ -1,23 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Zap, TrendingUp, Search, X, Coffee, ArrowRight, Bot, Palette, Video, MessageSquare, Code, BarChart3, Music, Image, Presentation, LineChart, Box, Megaphone, Microscope, Star, Clock, Users, Briefcase, GraduationCap, Pen, Settings, Heart, Cpu, Layers, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Sparkles, TrendingUp, Search, X, Coffee, ArrowRight, Bot, Palette, Video, MessageSquare, Code, BarChart3, Music, Presentation, LineChart, Box, Megaphone, Microscope, Users, Briefcase, GraduationCap, Pen, Settings, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ToolCard } from "@/components/ToolCard";
 import { CategoryFilter } from "@/components/CategoryFilter";
 import { CookieBanner } from "@/components/CookieBanner";
-import { AdBanner, AdGrid } from "@/components/AdBanner";
+import { AdGrid } from "@/components/AdBanner";
 import { AIAssistant } from "@/components/AIAssistant";
 import { InFeedAd, NativeAd } from "@/components/AdSenseAd";
-import { SkeletonCard, SkeletonGrid } from "@/components/SkeletonCard";
+import { SkeletonGrid } from "@/components/SkeletonCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { categories, CategoryId, popularTasks, professionFilters, TaskType, ProfessionType, aiGlossary, AITool } from "@/lib/tools-data";
+import { categories, CategoryId, popularTasks, professionFilters, TaskType, ProfessionType, AITool } from "@/lib/tools-data";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useData } from "@/hooks/useData";
 
@@ -174,8 +173,10 @@ export default function HomePage() {
   const [activeProfession, setActiveProfession] = useState<ProfessionType | null>(null);
   
   // PAGINACIÓN: Solo 20 herramientas inicialmente (antes 100)
+  // CORREGIDO: Inicializar totalCount con 6367 para evitar "0 de 6,367"
+  const TOTAL_TOOLS = 6367; // Hardcoded para mostrar desde el inicio
   const [tools, setTools] = useState<AITool[]>([]);
-  const [totalCount, setTotalCount] = useState(6367);
+  const [totalCount, setTotalCount] = useState(TOTAL_TOOLS);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -184,6 +185,7 @@ export default function HomePage() {
   // CONTADOR INMEDIATO: Reservar espacio para evitar CLS
   const [showInitialLoader, setShowInitialLoader] = useState(true);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const initialLoadDone = useRef(false);
   
   const TOOLS_PER_PAGE = 20; // Reducido de 100 a 20 para LCP
 
@@ -193,36 +195,6 @@ export default function HomePage() {
     async () => {
       const res = await fetch('/api/tools?featured=true&limit=8');
       if (!res.ok) throw new Error('Error cargando destacados');
-      return (await res.json()).tools as AITool[];
-    }
-  );
-
-  // FETCH con caché: Herramientas trending
-  const { data: trendingTools, isLoading: loadingTrending, error: errorTrending } = useData(
-    'trending-tools',
-    async () => {
-      const res = await fetch('/api/tools?trending=true&limit=8');
-      if (!res.ok) throw new Error('Error cargando tendencias');
-      return (await res.json()).tools as AITool[];
-    }
-  );
-
-  // FETCH con caché: Herramientas nuevas
-  const { data: newestTools, isLoading: loadingNewest, error: errorNewest } = useData(
-    'newest-tools',
-    async () => {
-      const res = await fetch('/api/tools?newest=true&limit=12');
-      if (!res.ok) throw new Error('Error cargando nuevas');
-      return (await res.json()).tools as AITool[];
-    }
-  );
-
-  // FETCH con caché: Herramientas top rated
-  const { data: topRatedTools, isLoading: loadingTopRated, error: errorTopRated } = useData(
-    'toprated-tools',
-    async () => {
-      const res = await fetch('/api/tools?topRated=true&limit=12');
-      if (!res.ok) throw new Error('Error cargando top rated');
       return (await res.json()).tools as AITool[];
     }
   );
@@ -265,11 +237,21 @@ export default function HomePage() {
     }
   }, [activeCategory, searchQuery]);
 
-  // Carga inicial
+  // Carga inicial - solo una vez
   useEffect(() => {
-    setPage(1);
-    setTools([]);
-    fetchTools(1);
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      fetchTools(1);
+    }
+  }, []);
+  
+  // Refetch cuando cambian filtros
+  useEffect(() => {
+    if (initialLoadDone.current) {
+      setPage(1);
+      setTools([]);
+      fetchTools(1);
+    }
   }, [activeCategory, searchQuery]);
 
   // Infinite scroll optimizado con Intersection Observer
@@ -311,11 +293,11 @@ export default function HomePage() {
 
   // Stats dinámicos
   const stats = useMemo(() => [
-    { value: `${totalCount.toLocaleString()}+`, label: t.stats.tools, icon: Bot, color: "from-purple-500 to-pink-500" },
-    { value: `${popularTasks.length}+`, label: language === "es" ? "Tareas" : "Tasks", icon: Settings, color: "from-blue-500 to-cyan-500" },
-    { value: `${professionFilters.length}+`, label: language === "es" ? "Profesiones" : "Professions", icon: Users, color: "from-green-500 to-emerald-500" },
-    { value: `${aiGlossary.length}+`, label: language === "es" ? "Términos IA" : "AI Terms", icon: Sparkles, color: "from-orange-500 to-yellow-500" },
-  ], [totalCount, t.stats.tools, language]);
+    { value: `${TOTAL_TOOLS.toLocaleString()}+`, label: t.stats.tools, icon: Bot, color: "from-purple-500 to-pink-500" },
+    { value: "11", label: language === "es" ? "Categorías" : "Categories", icon: Settings, color: "from-blue-500 to-cyan-500" },
+    { value: `${popularTasks.length}+`, label: language === "es" ? "Tareas" : "Tasks", icon: Pen, color: "from-green-500 to-emerald-500" },
+    { value: `${professionFilters.length}+`, label: language === "es" ? "Profesiones" : "Professions", icon: Users, color: "from-orange-500 to-yellow-500" },
+  ], [t.stats.tools, language]);
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -435,9 +417,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* SECCIONES DINÁMICAS CON SKELETONS */}
+        {/* SECCIÓN DESTACADA - Solo una, combinada */}
         <ToolsSection
-          title={language === "es" ? "Herramientas Destacadas" : "Featured Tools"}
+          title={language === "es" ? "⭐ Herramientas Destacadas" : "⭐ Featured Tools"}
           subtitle={language === "es" ? "Las mejores herramientas de IA seleccionadas por expertos" : "The best AI tools handpicked by experts"}
           tools={featuredTools || []}
           isLoading={loadingFeatured}
@@ -446,123 +428,7 @@ export default function HomePage() {
           iconColor="text-cyan-400"
         />
 
-        <ToolsSection
-          title={language === "es" ? "Nuevas Herramientas de IA" : "Newest AI Tools"}
-          subtitle={language === "es" ? "Las últimas herramientas de IA añadidas a nuestra colección" : "The latest AI tools added to our collection"}
-          tools={newestTools || []}
-          isLoading={loadingNewest}
-          error={errorNewest}
-          icon={Clock}
-          iconColor="text-emerald-400"
-          bgColor="bg-card/30 dark:bg-card/20"
-        />
-
-        <ToolsSection
-          title={language === "es" ? "Mejor Valoradas" : "Top Rated AI Tools"}
-          subtitle={language === "es" ? "Herramientas de IA con las mejores calificaciones de los usuarios" : "AI tools with the highest user ratings"}
-          tools={topRatedTools || []}
-          isLoading={loadingTopRated}
-          error={errorTopRated}
-          icon={Star}
-          iconColor="text-amber-400"
-        />
-
-        {/* Task Filter - Estático, no necesita loading */}
-        <section className="py-12 px-4 bg-card/30 dark:bg-card/20" aria-labelledby="tasks-title">
-          <div className="container mx-auto">
-            <div className="text-center mb-8">
-              <h2 id="tasks-title" className="text-2xl md:text-3xl font-bold mb-2">
-                <Settings className="w-6 h-6 inline-block mr-2 text-cyan-400" aria-hidden="true" />
-                {language === "es" ? "Explorar por Tarea" : "Browse by Task"}
-              </h2>
-              <p className="text-muted-foreground">
-                {language === "es" ? "Encuentra herramientas de IA según lo que quieres lograr" : "Find AI tools based on what you want to accomplish"}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {popularTasks.slice(0, 12).map((task, index) => (
-                <motion.button
-                  key={task.id}
-                  whileHover={shouldReduceMotion ? {} : { y: -4 }}
-                  whileFocus={shouldReduceMotion ? {} : { scale: 1.02 }}
-                  onClick={() => {
-                    setActiveTask(activeTask === task.id ? null : task.id);
-                    setActiveProfession(null);
-                    setActiveCategory("all");
-                  }}
-                  className={`cursor-pointer rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 ${
-                    activeTask === task.id ? 'ring-2 ring-cyan-500' : ''
-                  }`}
-                  aria-pressed={activeTask === task.id}
-                >
-                  <Card className={`bg-card/60 dark:bg-card/40 backdrop-blur-sm border-border/50 hover:border-cyan-500/40 transition-colors ${activeTask === task.id ? 'border-cyan-500' : ''}`}>
-                    <CardContent className="p-4 text-center">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-500/10 flex items-center justify-center text-xl mx-auto mb-2 text-cyan-400">
-                        {taskIcons[task.id] || <Settings className="w-5 h-5" />}
-                      </div>
-                      <h3 className="font-semibold text-sm">
-                        {language === "es" ? task.nameEs : task.name}
-                      </h3>
-                    </CardContent>
-                  </Card>
-                </motion.button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Profession Filter - Estático */}
-        <section className="py-12 px-4" aria-labelledby="professions-title">
-          <div className="container mx-auto">
-            <div className="text-center mb-8">
-              <h2 id="professions-title" className="text-2xl md:text-3xl font-bold mb-2">
-                <Users className="w-6 h-6 inline-block mr-2 text-violet-400" aria-hidden="true" />
-                {language === "es" ? "Herramientas por Profesión" : "Tools by Profession"}
-              </h2>
-              <p className="text-muted-foreground">
-                {language === "es" ? "Herramientas de IA diseñadas para tu profesión" : "AI tools designed for your profession"}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {professionFilters.slice(0, 8).map((profession) => (
-                <motion.button
-                  key={profession.id}
-                  whileHover={shouldReduceMotion ? {} : { y: -4 }}
-                  whileFocus={shouldReduceMotion ? {} : { scale: 1.02 }}
-                  onClick={() => {
-                    setActiveProfession(activeProfession === profession.id ? null : profession.id);
-                    setActiveTask(null);
-                    setActiveCategory("all");
-                  }}
-                  className={`cursor-pointer rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
-                    activeProfession === profession.id ? 'ring-2 ring-violet-500' : ''
-                  }`}
-                  aria-pressed={activeProfession === profession.id}
-                >
-                  <Card className={`bg-card/60 dark:bg-card/40 backdrop-blur-sm border-border/50 hover:border-violet-500/40 transition-colors ${activeProfession === profession.id ? 'border-violet-500' : ''}`}>
-                    <CardContent className="p-4 text-center">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 flex items-center justify-center text-xl mx-auto mb-2 text-violet-400">
-                        {professionIcons[profession.id] || <Users className="w-5 h-5" />}
-                      </div>
-                      <h3 className="font-semibold text-sm">
-                        {language === "es" ? profession.nameEs : profession.name}
-                      </h3>
-                    </CardContent>
-                  </Card>
-                </motion.button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Ad Banner */}
-        <section className="py-8 px-4">
-          <div className="container mx-auto">
-            <AdBanner type="featured" />
-          </div>
-        </section>
-
-        {/* Categories - Estático */}
+        {/* Categories - Compacto */}
         <section className="py-12 px-4" aria-labelledby="categories-title">
           <div className="container mx-auto">
             <div className="text-center mb-8">
@@ -637,14 +503,14 @@ export default function HomePage() {
               )}
             </AnimatePresence>
 
-            {/* CONTADOR - Muestra número real, no 0 */}
+            {/* CONTADOR - CORREGIDO: Muestra herramientas cargadas + total */}
             <div className="text-center mb-6" role="status" aria-live="polite">
               <Badge variant="outline" className="text-sm py-2 px-4 border-cyan-500/30">
                 <Bot className="w-4 h-4 mr-2 text-cyan-400" aria-hidden="true" />
                 {language === "es" 
-                  ? `Mostrando ${filteredTools.length > 0 ? filteredTools.length.toLocaleString() : '...'} de ${totalCount.toLocaleString()} herramientas`
-                  : `Showing ${filteredTools.length > 0 ? filteredTools.length.toLocaleString() : '...'} of ${totalCount.toLocaleString()} tools`}
-                {hasMore && <Loader2 className="w-4 h-4 ml-2 animate-spin text-cyan-400" aria-hidden="true" />}
+                  ? `Mostrando ${tools.length.toLocaleString()} de ${TOTAL_TOOLS.toLocaleString()} herramientas`
+                  : `Showing ${tools.length.toLocaleString()} of ${TOTAL_TOOLS.toLocaleString()} tools`}
+                {isLoadingMore && <Loader2 className="w-4 h-4 ml-2 animate-spin text-cyan-400" aria-hidden="true" />}
               </Badge>
             </div>
 
@@ -725,121 +591,55 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Trending */}
-        <ToolsSection
-          title={language === "es" ? "Tendencias" : "Trending Now"}
-          subtitle={language === "es" ? "Herramientas de IA que están ganando popularidad" : "AI tools that are gaining popularity"}
-          tools={trendingTools || []}
-          isLoading={loadingTrending}
-          error={errorTrending}
-          icon={TrendingUp}
-          iconColor="text-fuchsia-400"
-          bgColor="bg-card/30 dark:bg-card/20"
-        />
-
-        {/* Glossary - Estático */}
-        <section className="py-12 px-4" aria-labelledby="glossary-title">
-          <div className="container mx-auto">
-            <div className="text-center mb-8">
-              <h2 id="glossary-title" className="text-2xl md:text-3xl font-bold mb-2">
-                <Sparkles className="w-6 h-6 inline-block mr-2 text-cyan-400" aria-hidden="true" />
-                {language === "es" ? "Glosario de IA" : "AI Glossary"}
-              </h2>
-              <p className="text-muted-foreground">
-                {language === "es" ? "Aprende los términos clave de inteligencia artificial" : "Learn key artificial intelligence terms"}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
-              {aiGlossary.slice(0, 6).map((item) => (
-                <Card key={item.term} className="bg-card/60 dark:bg-card/40 backdrop-blur-sm border-border/50 hover:border-cyan-500/40 transition-colors h-full">
-                  <CardContent className="p-4">
-                    <h3 className="font-bold text-cyan-400 mb-2">{item.term}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "es" ? item.definitionEs : item.definition}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Amazon Ads */}
-        <section className="py-12 px-4">
-          <div className="container mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl md:text-3xl font-bold mb-2">
-                {language === "es" ? "Recursos Recomendados" : "Recommended Resources"}
-              </h2>
-              <p className="text-muted-foreground">
-                {language === "es" ? "Productos de Amazon para potenciar tu aprendizaje en IA" : "Amazon products to boost your AI learning"}
-              </p>
-            </div>
-            <AdGrid />
-          </div>
-        </section>
-
-        {/* About */}
-        <section id="about" className="py-20 px-4" aria-labelledby="about-title">
+        {/* About + Contact Combinados */}
+        <section id="about" className="py-16 px-4" aria-labelledby="about-title">
           <div className="container mx-auto max-w-4xl">
             <div className="text-center">
-              <Avatar className="w-24 h-24 mx-auto mb-6 border-4 border-cyan-500/30">
+              <Avatar className="w-20 h-20 mx-auto mb-4 border-4 border-cyan-500/30">
                 <AvatarImage src="/avatar.png" alt="WORLD.IA" />
                 <AvatarFallback>EG</AvatarFallback>
               </Avatar>
-              <h2 id="about-title" className="text-3xl md:text-4xl font-bold mb-4">
+              <h2 id="about-title" className="text-2xl md:text-3xl font-bold mb-3">
                 {language === "es" ? "Sobre Mí" : "About Me"}
               </h2>
-              <p className="text-lg text-muted-foreground mb-6 max-w-2xl mx-auto">
+              <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
                 {language === "es"
-                  ? "¡Hola! Soy Ezequiel Gonzalez, creador de contenido especializado en Inteligencia Artificial. Mi misión es ayudarte a descubrir y dominar las mejores herramientas de IA para potenciar tu productividad y creatividad."
-                  : "Hi! I'm Ezequiel Gonzalez, a content creator specialized in Artificial Intelligence. My mission is to help you discover and master the best AI tools to boost your productivity and creativity."}
+                  ? "¡Hola! Soy Ezequiel Gonzalez, creador de contenido especializado en IA. Mi misión es ayudarte a descubrir las mejores herramientas para potenciar tu productividad."
+                  : "Hi! I'm Ezequiel Gonzalez, a content creator specialized in AI. My mission is to help you discover the best tools to boost your productivity."}
               </p>
-              <Button
-                asChild
-                className="bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-400 hover:to-violet-400 text-white font-medium neon-glow"
-              >
-                <a href="https://ko-fi.com/ezequielia" target="_blank" rel="noopener noreferrer">
-                  <Coffee className="w-5 h-5 mr-2" aria-hidden="true" />
-                  {t.nav.donate}
-                </a>
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        {/* Contact */}
-        <section id="contact" className="py-20 px-4 bg-card/30 dark:bg-card/20" aria-labelledby="contact-title">
-          <div className="container mx-auto max-w-2xl text-center">
-            <h2 id="contact-title" className="text-3xl md:text-4xl font-bold mb-4">
-              {t.footer.contact}
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              {language === "es"
-                ? "¿Tienes alguna pregunta o sugerencia? ¡Me encantaría escucharte!"
-                : "Have any questions or suggestions? I'd love to hear from you!"}
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button asChild className="bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-400 hover:to-violet-400 text-white font-medium neon-glow">
-                <a href="https://www.instagram.com/m.ezequiel.gonzalez/" target="_blank" rel="noopener noreferrer">
-                  Instagram
-                </a>
-              </Button>
-              <Button asChild variant="outline" className="border-border/50 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50">
-                <a href="https://www.youtube.com/@Mat%C3%ADasEzequielGonz%C3%A1lez-d4d6v" target="_blank" rel="noopener noreferrer">
-                  YouTube
-                </a>
-              </Button>
-              <Button asChild variant="outline" className="border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/50">
-                <a href="https://x.com/MGonzalez85598" target="_blank" rel="noopener noreferrer">
-                  X (Twitter)
-                </a>
-              </Button>
-              <Button asChild variant="outline" className="border-cyan-500/30 hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/50">
-                <a href="https://www.linkedin.com/in/matiasezequielgonzalez/" target="_blank" rel="noopener noreferrer">
-                  LinkedIn
-                </a>
-              </Button>
+              
+              {/* Redes Sociales */}
+              <div className="flex flex-wrap justify-center gap-3 mb-6">
+                <Button asChild size="sm" className="bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-400 hover:to-violet-400 text-white">
+                  <a href="https://www.instagram.com/m.ezequiel.gonzalez/" target="_blank" rel="noopener noreferrer">
+                    Instagram
+                  </a>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="border-red-500/30 hover:bg-red-500/10 hover:text-red-500">
+                  <a href="https://www.youtube.com/@Mat%C3%ADasEzequielGonz%C3%A1lez-d4d6v" target="_blank" rel="noopener noreferrer">
+                    YouTube
+                  </a>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-400">
+                  <a href="https://x.com/MGonzalez85598" target="_blank" rel="noopener noreferrer">
+                    X (Twitter)
+                  </a>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400">
+                  <a href="https://www.linkedin.com/in/matiasezequielgonzalez/" target="_blank" rel="noopener noreferrer">
+                    LinkedIn
+                  </a>
+                </Button>
+                <Button asChild size="sm" className="bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white">
+                  <a href="https://ko-fi.com/ezequielia" target="_blank" rel="noopener noreferrer">
+                    <Coffee className="w-4 h-4 mr-1" aria-hidden="true" />
+                    {t.nav.donate}
+                  </a>
+                </Button>
+              </div>
+              
+              {/* Amazon Ads */}
+              <AdGrid />
             </div>
           </div>
         </section>
